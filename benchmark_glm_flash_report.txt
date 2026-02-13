@@ -1,0 +1,104 @@
+
+==============================================================================================================
+BENCHMARK RESULTS: GLM-4.7-Flash (scaled-down) Norm Removal
+==============================================================================================================
+
+--- Prefill (seq_len=128) ---
+Variant                                         Mean(ms)    Std(ms)    Speedup  Params Removed
+-----------------------------------------------------------------------------------------------
+1. Original (baseline)                             388.9        5.5     1.000x               0
+2. Remove MLA norms (q_a + kv_a)                   343.3       28.8     1.133x          10,240
+3. Remove input_layernorm                          359.8        9.9     1.081x          16,384
+4. Remove post_attention_layernorm                 321.7       43.7     1.209x          16,384
+5. Remove final model.norm                         329.2       49.4     1.181x           2,048
+6. Remove ALL norms                                363.5        5.3     1.070x          45,056
+7. Replace ALL with ScaleOnly                      350.4       28.0     1.110x               0
+8. Replace ALL with ConstantScale                  360.4        7.2     1.079x          45,056
+
+--- Prefill (seq_len=512) ---
+Variant                                         Mean(ms)    Std(ms)    Speedup  Params Removed
+-----------------------------------------------------------------------------------------------
+1. Original (baseline)                            1222.7       74.9     1.000x               0
+2. Remove MLA norms (q_a + kv_a)                  1128.6       44.8     1.083x          10,240
+3. Remove input_layernorm                         1261.4       49.3     0.969x          16,384
+4. Remove post_attention_layernorm                1091.1       59.7     1.121x          16,384
+5. Remove final model.norm                        1149.4       39.9     1.064x           2,048
+6. Remove ALL norms                               1242.5       29.3     0.984x          45,056
+7. Replace ALL with ScaleOnly                     1184.6       41.4     1.032x               0
+8. Replace ALL with ConstantScale                 1132.6       54.0     1.080x          45,056
+
+--- Decode (per token) ---
+Variant                                         Mean(ms)    Speedup
+----------------------------------------------------------------------
+1. Original (baseline)                              38.6     1.000x
+2. Remove MLA norms (q_a + kv_a)                    37.4     1.032x
+3. Remove input_layernorm                           37.3     1.037x
+4. Remove post_attention_layernorm                  40.7     0.948x
+5. Remove final model.norm                          40.1     0.963x
+6. Remove ALL norms                                 40.5     0.955x
+7. Replace ALL with ScaleOnly                       38.8     0.996x
+8. Replace ALL with ConstantScale                   39.8     0.970x
+
+==============================================================================================================
+ANALYSIS: GLM-4.7-Flash Norm Architecture
+==============================================================================================================
+
+## GLM-4.7-Flash Architecture (30B-A3B MoE with MLA)
+
+Key differences from standard transformers:
+
+1. **MLA (Multi-head Latent Attention)** uses low-rank projections:
+   - Q: hidden(2048) → q_a_proj(768) → **q_a_layernorm** → q_b_proj(heads*qk_dim)
+   - KV: hidden(2048) → kv_a_proj(512+64) → **kv_a_layernorm** → kv_b_proj(...)
+   These norms sit BETWEEN the low-rank compression and decompression.
+
+2. **MoE (Mixture of Experts)**: 64 routed + 1 shared expert per layer
+   - The post_attention_layernorm normalizes BEFORE the MoE router
+   - Important for router stability (expert selection)
+
+3. **47 layers** with Pre-LN pattern
+
+## Norm inventory (full model):
+
+| Norm                     | Dim  | Count | Params each | Total     |
+|--------------------------|------|-------|-------------|-----------|
+| q_a_layernorm            | 768  | 47    | 768         | 36,096    |
+| kv_a_layernorm           | 512  | 47    | 512         | 24,064    |
+| input_layernorm          | 2048 | 47    | 2,048       | 96,256    |
+| post_attention_layernorm | 2048 | 47    | 2,048       | 96,256    |
+| model.norm               | 2048 | 1     | 2,048       | 2,048     |
+| **Total**                |      | **189** |           | **254,720** (0.0008% of 30B) |
+
+## Cost of RMSNorm per call:
+   - Cast to fp32: memory bandwidth
+   - x.pow(2).mean(-1): reduction over dim
+   - rsqrt + multiply: O(1) + O(dim)
+   - weight * result: O(dim)
+   For dim=2048: ~6K FLOPs per token per norm
+   For dim=768: ~2.3K FLOPs
+   For dim=512: ~1.5K FLOPs
+
+## Replacement recommendations for GLM-4.7-Flash:
+
+### MLA norms (q_a_layernorm, kv_a_layernorm) — MOST IMPACTFUL TO REMOVE
+   - These norms are called on EVERY token for EVERY layer
+   - They operate on compressed representations (768, 512 dims)
+   - The low-rank bottleneck already constrains magnitudes
+   - **Recommendation**: Replace with ScaleOnly or remove entirely
+   - Expected speedup: ~3-8% (architecture-dependent)
+
+### input_layernorm / post_attention_layernorm — RISKY TO REMOVE
+   - Critical for Pre-LN training stability
+   - post_attention_layernorm is especially important for MoE:
+     it normalizes inputs to the router, affecting expert selection
+   - **Recommendation**: Replace with ScaleOnly for training from scratch
+   - Keep as RMSNorm for fine-tuning existing weights
+
+### model.norm (final) — KEEP
+   - Only 1 instance, negligible cost
+   - Important for LM head logit scale
+
+### Practical strategy:
+   1. **Inference speedup (no retrain)**: Remove q_a_layernorm + kv_a_layernorm
+   2. **Train from scratch**: ScaleOnly for all MLA norms, RMSNorm for layer norms
+   3. **Maximum speed**: ScaleOnly everywhere except model.norm

@@ -1,0 +1,203 @@
+{
+  "model": "zai-org/GLM-4.7-Flash",
+  "scaled_config": {
+    "num_layers": 8,
+    "n_routed_experts": 8
+  },
+  "device": "cpu",
+  "dtype": "torch.float32",
+  "results": [
+    {
+      "name": "1. Original (baseline)",
+      "total_params": 1466068992,
+      "norm_params_removed": 0,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 388.8810407000051,
+          "min_ms": 381.65135300005204,
+          "max_ms": 396.99005099998885,
+          "std_ms": 5.483849178923728
+        },
+        "512": {
+          "mean_ms": 1222.7496219000159,
+          "min_ms": 1019.6156480000127,
+          "max_ms": 1293.3364500000835,
+          "std_ms": 74.89014722559013
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 38.62404715999787,
+        "min_per_token_ms": 36.34337295000023,
+        "max_per_token_ms": 43.488498099998196
+      }
+    },
+    {
+      "name": "2. Remove MLA norms (q_a + kv_a)",
+      "total_params": 1466058752,
+      "norm_params_removed": 10240,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 343.2907602999762,
+          "min_ms": 269.4716519999929,
+          "max_ms": 369.3311330000597,
+          "std_ms": 28.786213009354388
+        },
+        "512": {
+          "mean_ms": 1128.5755049000159,
+          "min_ms": 1065.0235709999833,
+          "max_ms": 1186.2545870000076,
+          "std_ms": 44.81748542781069
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 37.41419581999821,
+        "min_per_token_ms": 36.40619505000018,
+        "max_per_token_ms": 39.193736149996994
+      }
+    },
+    {
+      "name": "3. Remove input_layernorm",
+      "total_params": 1466052608,
+      "norm_params_removed": 16384,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 359.80694209998774,
+          "min_ms": 333.84620399999676,
+          "max_ms": 371.33289700000205,
+          "std_ms": 9.89936900589086
+        },
+        "512": {
+          "mean_ms": 1261.438033500008,
+          "min_ms": 1174.0951809999842,
+          "max_ms": 1309.2598480000106,
+          "std_ms": 49.32385039239868
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 37.255413289999524,
+        "min_per_token_ms": 36.414161600004036,
+        "max_per_token_ms": 37.98109924999835
+      }
+    },
+    {
+      "name": "4. Remove post_attention_layernorm",
+      "total_params": 1466052608,
+      "norm_params_removed": 16384,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 321.6734900000006,
+          "min_ms": 242.87094199996773,
+          "max_ms": 378.4993160001022,
+          "std_ms": 43.65503058606323
+        },
+        "512": {
+          "mean_ms": 1091.0896922999882,
+          "min_ms": 984.8159140000234,
+          "max_ms": 1178.2433669999364,
+          "std_ms": 59.7256447594869
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 40.73488795000003,
+        "min_per_token_ms": 38.551281849998986,
+        "max_per_token_ms": 47.03313410000192
+      }
+    },
+    {
+      "name": "5. Remove final model.norm",
+      "total_params": 1466066944,
+      "norm_params_removed": 2048,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 329.2053948999978,
+          "min_ms": 252.1748880000132,
+          "max_ms": 371.97203499999887,
+          "std_ms": 49.40613050053288
+        },
+        "512": {
+          "mean_ms": 1149.4108715999914,
+          "min_ms": 1058.7360289999879,
+          "max_ms": 1193.1488249999802,
+          "std_ms": 39.90936524342947
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 40.09532987000284,
+        "min_per_token_ms": 37.08642095000414,
+        "max_per_token_ms": 41.95800240000267
+      }
+    },
+    {
+      "name": "6. Remove ALL norms",
+      "total_params": 1466023936,
+      "norm_params_removed": 45056,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 363.4879842000032,
+          "min_ms": 355.48481700004686,
+          "max_ms": 373.9817860000585,
+          "std_ms": 5.289349236642224
+        },
+        "512": {
+          "mean_ms": 1242.5171201000012,
+          "min_ms": 1177.5387610000507,
+          "max_ms": 1283.3570909999708,
+          "std_ms": 29.29968935241273
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 40.459224760002144,
+        "min_per_token_ms": 36.78067024999336,
+        "max_per_token_ms": 44.95988700000453
+      }
+    },
+    {
+      "name": "7. Replace ALL with ScaleOnly",
+      "total_params": 1466068992,
+      "norm_params_removed": 0,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 350.3733647999752,
+          "min_ms": 293.75577900009375,
+          "max_ms": 377.6468189998923,
+          "std_ms": 27.951532314133228
+        },
+        "512": {
+          "mean_ms": 1184.5881688999725,
+          "min_ms": 1106.8479159998788,
+          "max_ms": 1240.091528999983,
+          "std_ms": 41.39415298362382
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 38.78911890000154,
+        "min_per_token_ms": 35.55865685000299,
+        "max_per_token_ms": 46.36689139999817
+      }
+    },
+    {
+      "name": "8. Replace ALL with ConstantScale",
+      "total_params": 1466023936,
+      "norm_params_removed": 45056,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 360.41639380002835,
+          "min_ms": 342.1252020000338,
+          "max_ms": 373.159287000135,
+          "std_ms": 7.19548853687897
+        },
+        "512": {
+          "mean_ms": 1132.612019899966,
+          "min_ms": 1022.7687410001636,
+          "max_ms": 1203.043772000001,
+          "std_ms": 54.04277903526008
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 39.81358803000148,
+        "min_per_token_ms": 37.39060950000521,
+        "max_per_token_ms": 45.247141400000146
+      }
+    }
+  ]
+}
