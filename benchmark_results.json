@@ -1,0 +1,225 @@
+{
+  "model": "Qwen/Qwen3-0.6B",
+  "device": "cpu",
+  "dtype": "torch.float32",
+  "warmup_iters": 3,
+  "bench_iters": 10,
+  "results": [
+    {
+      "name": "1. Original (baseline)",
+      "total_params": 751632384,
+      "norm_params_removed": 0,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 350.03743600000234,
+          "min_ms": 320.80730600000607,
+          "max_ms": 395.13865000003534,
+          "std_ms": 21.74692273330717
+        },
+        "512": {
+          "mean_ms": 796.1669322000148,
+          "min_ms": 702.1454620000895,
+          "max_ms": 874.510960000066,
+          "std_ms": 51.60155179670873
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 54.54147309000177,
+        "min_per_token_ms": 50.924085850004985,
+        "max_per_token_ms": 59.68609619999938
+      }
+    },
+    {
+      "name": "2. Remove q_norm + k_norm",
+      "total_params": 751625216,
+      "norm_params_removed": 7168,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 333.65764250000893,
+          "min_ms": 305.79610299992055,
+          "max_ms": 395.29008099998464,
+          "std_ms": 24.66912864522091
+        },
+        "512": {
+          "mean_ms": 778.0193964000205,
+          "min_ms": 631.2280110000756,
+          "max_ms": 950.6444300000112,
+          "std_ms": 78.98642246923858
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 50.02765738999983,
+        "min_per_token_ms": 48.800140100001954,
+        "max_per_token_ms": 51.859396399999014
+      }
+    },
+    {
+      "name": "3. Remove input_layernorm",
+      "total_params": 751603712,
+      "norm_params_removed": 28672,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 329.1756788999919,
+          "min_ms": 311.8110190000607,
+          "max_ms": 349.2125789999818,
+          "std_ms": 12.805047197754345
+        },
+        "512": {
+          "mean_ms": 756.8406977999871,
+          "min_ms": 702.5540450000562,
+          "max_ms": 823.7736869999708,
+          "std_ms": 39.67541252748482
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 53.42066729999942,
+        "min_per_token_ms": 48.57103935000282,
+        "max_per_token_ms": 60.33309129999793
+      }
+    },
+    {
+      "name": "4. Remove post_attention_layernorm",
+      "total_params": 751603712,
+      "norm_params_removed": 28672,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 331.0406468999986,
+          "min_ms": 311.3754460000564,
+          "max_ms": 386.6911730000311,
+          "std_ms": 22.78901489748944
+        },
+        "512": {
+          "mean_ms": 716.187738099984,
+          "min_ms": 644.1260589999729,
+          "max_ms": 807.1548460000031,
+          "std_ms": 42.907270227878506
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 51.85087742000064,
+        "min_per_token_ms": 48.62043135000249,
+        "max_per_token_ms": 55.87269349999815
+      }
+    },
+    {
+      "name": "5. Remove final model.norm",
+      "total_params": 751631360,
+      "norm_params_removed": 1024,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 361.4189938999857,
+          "min_ms": 330.3751349999402,
+          "max_ms": 436.7401169999994,
+          "std_ms": 35.89711639676558
+        },
+        "512": {
+          "mean_ms": 758.5588802999837,
+          "min_ms": 651.4818179999793,
+          "max_ms": 855.4654060000075,
+          "std_ms": 57.92694499862945
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 50.61277719000145,
+        "min_per_token_ms": 49.41206775000069,
+        "max_per_token_ms": 52.216220100001465
+      }
+    },
+    {
+      "name": "6. Remove ALL norms",
+      "total_params": 751566848,
+      "norm_params_removed": 65536,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 310.1767840999969,
+          "min_ms": 278.26989400000457,
+          "max_ms": 336.67414199999257,
+          "std_ms": 18.528640692176076
+        },
+        "512": {
+          "mean_ms": 728.9009952000129,
+          "min_ms": 651.3132979999909,
+          "max_ms": 835.1163390000238,
+          "std_ms": 48.460096614143275
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 47.73469130000194,
+        "min_per_token_ms": 41.28426935000107,
+        "max_per_token_ms": 53.585092600002326
+      }
+    },
+    {
+      "name": "7. Replace with ScaleOnly",
+      "total_params": 751632384,
+      "norm_params_removed": 0,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 300.98651679999193,
+          "min_ms": 282.92884099994353,
+          "max_ms": 321.0065040000245,
+          "std_ms": 11.133762860171169
+        },
+        "512": {
+          "mean_ms": 774.0516780000007,
+          "min_ms": 731.0250460000134,
+          "max_ms": 812.3508239999637,
+          "std_ms": 28.48902484058885
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 44.92739824999944,
+        "min_per_token_ms": 40.74393269999632,
+        "max_per_token_ms": 47.052121699999816
+      }
+    },
+    {
+      "name": "8. Replace with ConstantScale",
+      "total_params": 751566848,
+      "norm_params_removed": 65536,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 324.8826093000275,
+          "min_ms": 307.341076000057,
+          "max_ms": 343.2528900000307,
+          "std_ms": 10.545874218670072
+        },
+        "512": {
+          "mean_ms": 785.9183949999988,
+          "min_ms": 712.2268130000293,
+          "max_ms": 848.1597219999912,
+          "std_ms": 41.08876999432547
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 47.743443069999785,
+        "min_per_token_ms": 45.968254550001575,
+        "max_per_token_ms": 50.89168179999888
+      }
+    },
+    {
+      "name": "9. Replace with L2Norm",
+      "total_params": 751632384,
+      "norm_params_removed": 0,
+      "prefill_ms": {
+        "128": {
+          "mean_ms": 350.24966000001996,
+          "min_ms": 301.33585900000526,
+          "max_ms": 455.0739960000101,
+          "std_ms": 42.63770285437598
+        },
+        "512": {
+          "mean_ms": 794.9690806999911,
+          "min_ms": 723.3331940000198,
+          "max_ms": 877.8060920000144,
+          "std_ms": 44.015853625499645
+        }
+      },
+      "decode_ms": {
+        "per_token_ms": 57.19556506000117,
+        "min_per_token_ms": 51.176170450003156,
+        "max_per_token_ms": 61.27973244999794
+      }
+    }
+  ]
+}

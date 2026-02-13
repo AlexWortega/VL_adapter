@@ -1,0 +1,123 @@
+
+====================================================================================================
+BENCHMARK RESULTS: Qwen3-0.6B Norm Removal
+====================================================================================================
+
+--- Prefill (seq_len=128) ---
+Variant                                    Mean(ms)    Std(ms)    Speedup  Params Removed
+------------------------------------------------------------------------------------------
+1. Original (baseline)                        350.0       21.7     1.000x               0
+2. Remove q_norm + k_norm                     333.7       24.7     1.049x           7,168
+3. Remove input_layernorm                     329.2       12.8     1.063x          28,672
+4. Remove post_attention_layernorm            331.0       22.8     1.057x          28,672
+5. Remove final model.norm                    361.4       35.9     0.969x           1,024
+6. Remove ALL norms                           310.2       18.5     1.129x          65,536
+7. Replace with ScaleOnly                     301.0       11.1     1.163x               0
+8. Replace with ConstantScale                 324.9       10.5     1.077x          65,536
+9. Replace with L2Norm                        350.2       42.6     0.999x               0
+
+--- Prefill (seq_len=512) ---
+Variant                                    Mean(ms)    Std(ms)    Speedup  Params Removed
+------------------------------------------------------------------------------------------
+1. Original (baseline)                        796.2       51.6     1.000x               0
+2. Remove q_norm + k_norm                     778.0       79.0     1.023x           7,168
+3. Remove input_layernorm                     756.8       39.7     1.052x          28,672
+4. Remove post_attention_layernorm            716.2       42.9     1.112x          28,672
+5. Remove final model.norm                    758.6       57.9     1.050x           1,024
+6. Remove ALL norms                           728.9       48.5     1.092x          65,536
+7. Replace with ScaleOnly                     774.1       28.5     1.029x               0
+8. Replace with ConstantScale                 785.9       41.1     1.013x          65,536
+9. Replace with L2Norm                        795.0       44.0     1.002x               0
+
+--- Decode (per token) ---
+Variant                                    Mean(ms)    Speedup
+-----------------------------------------------------------------
+1. Original (baseline)                         54.5     1.000x
+2. Remove q_norm + k_norm                      50.0     1.090x
+3. Remove input_layernorm                      53.4     1.021x
+4. Remove post_attention_layernorm             51.9     1.052x
+5. Remove final model.norm                     50.6     1.078x
+6. Remove ALL norms                            47.7     1.143x
+7. Replace with ScaleOnly                      44.9     1.214x
+8. Replace with ConstantScale                  47.7     1.142x
+9. Replace with L2Norm                         57.2     0.954x
+
+====================================================================================================
+ANALYSIS & RECOMMENDATIONS
+====================================================================================================
+
+## Architecture of Qwen3-0.6B Norms
+
+Qwen3-0.6B uses Qwen3RMSNorm (Root Mean Square Layer Normalization) in 4 positions:
+
+1. **q_norm / k_norm** (28 layers x 2 = 56 norms, dim=128 each)
+   - Applied to Q and K projections BEFORE RoPE
+   - Stabilizes attention logits by normalizing query/key magnitudes
+   - Relatively cheap: operates on head_dim=128
+
+2. **input_layernorm** (28 layers, dim=1024 each)
+   - Pre-attention norm (Pre-LN transformer style)
+   - Critical for training stability in deep transformers
+   - Operates on full hidden_size=1024
+
+3. **post_attention_layernorm** (28 layers, dim=1024 each)
+   - Pre-MLP norm
+   - Normalizes residual stream before MLP
+   - Operates on full hidden_size=1024
+
+4. **model.norm** (1 norm, dim=1024)
+   - Final norm before LM head
+   - Ensures proper scale for logit computation
+
+## RMSNorm computation cost breakdown:
+   - Cast to float32 (memory bandwidth)
+   - Square all elements: O(d)
+   - Mean reduction: O(d)
+   - rsqrt: O(1)
+   - Multiply by normalized + weight: O(d)
+   Total: ~3*d FLOPs per token per norm application
+
+## Replacement Recommendations:
+
+### 1. ScaleOnly (learnable per-channel scale, NO normalization)
+   - **Cost**: 1x multiply (vs 3x for RMSNorm)
+   - **Pros**: Keeps learnable scale, ~3x fewer FLOPs in norm
+   - **Cons**: Loses variance normalization → may destabilize training
+   - **Best for**: q_norm/k_norm (attention is already softmax-normalized)
+
+### 2. ConstantScale (divide by sqrt(d), no learnable params)
+   - **Cost**: 1x multiply by constant
+   - **Pros**: Zero learnable params, deterministic
+   - **Cons**: No adaptation, may hurt quality significantly
+   - **Best for**: Not recommended for production; good for ablation
+
+### 3. L2Norm (normalize to unit vector, then scale)
+   - **Cost**: Similar to RMSNorm (norm + divide + scale)
+   - **Pros**: Mathematically cleaner, same cost
+   - **Cons**: No speedup over RMSNorm
+   - **Best for**: Research comparison only
+
+### 4. Complete Removal (Identity)
+   - **Cost**: Zero
+   - **Pros**: Maximum speedup
+   - **Cons**: Model will need retraining; removing input/post_attn norms
+     will likely break pretrained weights completely
+
+## Practical Recommendation:
+
+For **inference speedup without retraining**:
+  → Remove q_norm + k_norm only. These have the least impact on output
+    quality because attention scores go through softmax anyway.
+    The speedup is modest but "free" quality-wise for many tasks.
+
+For **training a new model from scratch**:
+  → Replace RMSNorm with ScaleOnly for q_norm/k_norm
+  → Keep input_layernorm and post_attention_layernorm as RMSNorm
+    (critical for training stability)
+  → Or try replacing ALL norms with ScaleOnly and compensate with
+    careful learning rate scheduling + gradient clipping
+
+For **maximum throughput (with retraining budget)**:
+  → Remove q_norm/k_norm entirely (Identity)
+  → Replace input_layernorm + post_attention_layernorm with ScaleOnly
+  → Keep final model.norm as RMSNorm (cheap, important for logit scale)
